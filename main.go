@@ -82,8 +82,6 @@ func BuildPrivateKey(public_key *rsa.PublicKey, p, q *big.Int) *rsa.PrivateKey {
 	private_key.D = d
 	private_key.Primes = []*big.Int{p, q}
 
-	private_key.Precompute()
-
 	return private_key
 }
 
