@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -12,23 +13,23 @@ import (
 	"strings"
 )
 
-func ReadPublicKey(pempath string) *rsa.PublicKey {
+func ReadPublicKey(pempath string) (*rsa.PublicKey, error) {
 	pemfile, err := ioutil.ReadFile(pempath)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	block, _ := pem.Decode(pemfile)
 	if block == nil || block.Type != "PUBLIC KEY" {
-		panic("failed to decode PEM block containing public key")
+		return nil, errors.New("failed to decode PEM block containing public key")
 	}
 
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		panic("failed to parse DER encoded public key: " + err.Error())
+		return nil, err
 	}
 
-	return pub.(*rsa.PublicKey)
+	return pub.(*rsa.PublicKey), nil
 }
 
 func WritePrivateKey(private_key *rsa.PrivateKey, out_path string) error {
@@ -41,21 +42,24 @@ func WritePrivateKey(private_key *rsa.PrivateKey, out_path string) error {
 	file, err := os.OpenFile(out_path, os.O_CREATE|os.O_WRONLY, 0600)
 	defer file.Close()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	return pem.Encode(file, der_block)
 }
 
-func GenerateProductOfNs(files []string) (product *big.Int) {
+func GenerateProductOfNs(files []string) (*big.Int, error) {
 	product = big.NewInt(1)
 
 	for _, file := range files {
-		public_key := ReadPublicKey(file)
+		public_key, err := ReadPublicKey(file)
+		if err != nil {
+			return nil, err
+		}
 		product.Mul(product, public_key.N)
 	}
 
-	return
+	return product, nil
 }
 
 func BuildPrivateKey(public_key *rsa.PublicKey, p, q *big.Int) *rsa.PrivateKey {
@@ -92,10 +96,16 @@ func main() {
 	files, _ := filepath.Glob(pem_file_pattern)
 
 	// Get the product of the Ns in all the PEM files.
-	prod_ns := GenerateProductOfNs(files)
+	prod_ns, err := GenerateProductOfNs(files)
+	if err != nil {
+		fmt.Errorf("could not generate product of Ns: %v", err)
+	}
 
 	for _, file := range files {
-		public_key := ReadPublicKey(file)
+		public_key, err := ReadPublicKey(file)
+		if err != nil {
+			fmt.Errorf("could not read %s: %v", file, err)
+		}
 
 		// Divide prod_ns by the current N otherwise the
 		// greatest common denominator will be N.
@@ -111,17 +121,22 @@ func main() {
 		// is greater than 1 then we know we've found a
 		// a common factor between the current key and
 		// one of the other keys.
-		if p.Cmp(big.NewInt(1)) == 1 {
-			found_keys += 1
-			q := new(big.Int)
-			q.Div(public_key.N, p)
-
-			// now we have p and q we can create a private key
-			private_key := BuildPrivateKey(public_key, p, q)
-			pk_file := strings.Replace(file, ".pem", ".pk", 1)
-			WritePrivateKey(private_key, pk_file)
+		if p.Cmp(big.NewInt(1)) < 1 {
+			continue
 		}
 
+		found_keys += 1
+		q := new(big.Int)
+		q.Div(public_key.N, p)
+
+		// now we have p and q we can create a private key
+		private_key := BuildPrivateKey(public_key, p, q)
+		pk_file := strings.Replace(file, ".pem", ".pk", 1)
+
+		err = WritePrivateKey(private_key, pk_file)
+		if err != nil {
+			fmt.Errorf("error writing %s", pk_file)
+		}
 	}
 
 	fmt.Printf("Generated %d private keys for %d public keys\n", found_keys, len(files))
