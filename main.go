@@ -49,7 +49,7 @@ func WritePrivateKey(private_key *rsa.PrivateKey, out_path string) error {
 }
 
 func GenerateProductOfNs(files []string) (*big.Int, error) {
-	product = big.NewInt(1)
+	product := big.NewInt(1)
 
 	for _, file := range files {
 		public_key, err := ReadPublicKey(file)
