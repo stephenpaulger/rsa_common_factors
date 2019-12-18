@@ -10,13 +10,13 @@ import (
 	"os"
 )
 
-func ReadPublicKey(pempath string) (*rsa.PublicKey, error) {
-	pemfile, err := ioutil.ReadFile(pempath)
+func ReadPublicKey(pemPath string) (*rsa.PublicKey, error) {
+	pemFile, err := ioutil.ReadFile(pemPath)
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(pemfile)
+	block, _ := pem.Decode(pemFile)
 	if block == nil || block.Type != "PUBLIC KEY" {
 		return nil, errors.New("failed to decode PEM block containing public key")
 	}
@@ -29,23 +29,23 @@ func ReadPublicKey(pempath string) (*rsa.PublicKey, error) {
 	return pub.(*rsa.PublicKey), nil
 }
 
-func WritePrivateKey(private_key *rsa.PrivateKey, out_path string) error {
-	der_bytes := x509.MarshalPKCS1PrivateKey(private_key)
+func WritePrivateKey(privateKey *rsa.PrivateKey, outPath string) error {
+	derBytes := x509.MarshalPKCS1PrivateKey(privateKey)
 
-	der_block := new(pem.Block)
-	der_block.Type = "RSA PRIVATE KEY"
-	der_block.Bytes = der_bytes
+	derBlock := new(pem.Block)
+	derBlock.Type = "RSA PRIVATE KEY"
+	derBlock.Bytes = derBytes
 
-	file, err := os.OpenFile(out_path, os.O_CREATE|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY, 0600)
 	defer file.Close()
 	if err != nil {
 		return err
 	}
 
-	return pem.Encode(file, der_block)
+	return pem.Encode(file, derBlock)
 }
 
-func BuildPrivateKey(public_key *rsa.PublicKey, p, q *big.Int) *rsa.PrivateKey {
+func BuildPrivateKey(publicKey *rsa.PublicKey, p, q *big.Int) *rsa.PrivateKey {
 	// Using E from the public key, p and q we can calculate the other
 	// values needed to make a private key.
 
@@ -61,13 +61,13 @@ func BuildPrivateKey(public_key *rsa.PublicKey, p, q *big.Int) *rsa.PrivateKey {
 	// d = E^(-1) mod phi
 	g := new(big.Int)
 	d := new(big.Int)
-	g.GCD(d, nil, big.NewInt(int64(public_key.E)), phi)
+	g.GCD(d, nil, big.NewInt(int64(publicKey.E)), phi)
 
-	private_key := new(rsa.PrivateKey)
-	private_key.N = public_key.N
-	private_key.E = public_key.E
-	private_key.D = d
-	private_key.Primes = []*big.Int{p, q}
+	privateKey := new(rsa.PrivateKey)
+	privateKey.N = publicKey.N
+	privateKey.E = publicKey.E
+	privateKey.D = d
+	privateKey.Primes = []*big.Int{p, q}
 
-	return private_key
+	return privateKey
 }
